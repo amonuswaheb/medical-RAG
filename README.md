@@ -6,7 +6,7 @@ This project implements an end-to-end clinical evidence question-answering pipel
 1. **Ingestion**: Parses medical guideline PDFs from `data/` and splits them into text chunks.
 2. **Embeddings & Vector Database**: Computes embeddings locally using FastEmbed (`BAAI/bge-small-en-v1.5`) and stores them in ChromaDB (100% free, runs offline, no API key needed).
 3. **Retrieval**: Searches the vector database for the most relevant guideline passages.
-4. **Generation**: Uses Google Gemini (`gemini-2.5-flash-lite` via the official `google-genai` SDK) to produce grounded, structured clinical answers with exact citations and safe refusals.
+4. **Generation**: Uses Google Gemini (`gemini-3.5-flash-lite` via the official `google-genai` SDK) to produce grounded, structured clinical answers with exact citations and safe refusals.
 
 ---
 
@@ -21,7 +21,7 @@ PDF Document (data/)
                   └── Vector Storage (ChromaDB)
                       └── Retrieval (similarity search)
                           └── Context Construction
-                              └── Generation (Google Gemini / gemini-2.5-flash-lite)
+                              └── Generation (Google Gemini / gemini-3.5-flash-lite)
                                   └── Grounded Output (JSON Schema with Citations & Refusal)
 ```
 
@@ -92,7 +92,7 @@ Open the newly created `.env` file in Notepad or VS Code. It should contain:
 ```env
 EMBEDDING_PROVIDER=local
 GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
-GEMINI_MODEL=gemini-2.5-flash-lite
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
 > **Important notes about `.env`:**

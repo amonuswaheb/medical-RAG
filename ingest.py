@@ -9,6 +9,7 @@ and a stable chunk id.
 Usage:
     python ingest.py
 """
+import re
 import sys
 from pathlib import Path
 
@@ -18,12 +19,23 @@ from langchain_chroma import Chroma
 
 import config
 
+def clean_html(text: str) -> str:
+    """Strips HTML tags (e.g. from PDF tables) and collapses extra whitespace."""
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
 
 def get_embedding_function():
     """Returns the embedding function based on config.EMBEDDING_PROVIDER."""
     if config.EMBEDDING_PROVIDER == "openai":
         from langchain_openai import OpenAIEmbeddings
         return OpenAIEmbeddings(model=config.OPENAI_EMBEDDING_MODEL)
+    elif config.EMBEDDING_PROVIDER == "gemini":
+        from langchain_google_genai import GoogleGenerativeAIEmbeddings
+        return GoogleGenerativeAIEmbeddings(
+            model=config.GEMINI_EMBEDDING_MODEL,
+            google_api_key=config.GEMINI_API_KEY,
+        )
     else:
         from langchain_community.embeddings import FastEmbedEmbeddings
         return FastEmbedEmbeddings(model_name=config.LOCAL_EMBEDDING_MODEL)
@@ -45,6 +57,7 @@ def load_pdfs(data_dir: Path):
         pages = loader.load()
         for page in pages:
             # Normalize metadata: every chunk downstream inherits this
+            page.page_content = clean_html(page.page_content)
             page.metadata["document_name"] = pdf_path.stem
             page.metadata["page_number"] = page.metadata.get("page", 0) + 1
         all_docs.extend(pages)
@@ -71,18 +84,33 @@ def chunk_documents(documents):
 
     return chunks
 
-
 def build_index(chunks):
-    """Embeds chunks and persists them into a local Chroma collection."""
+    """Embeds chunks in rate-limited batches and persists them into a local Chroma collection."""
+    import time
     embedding_fn = get_embedding_function()
-
     print(f"Embedding {len(chunks)} chunks using '{config.EMBEDDING_PROVIDER}' provider ...")
-    vectordb = Chroma.from_documents(
-        documents=chunks,
-        embedding=embedding_fn,
-        collection_name=config.COLLECTION_NAME,
-        persist_directory=str(config.CHROMA_DIR),
-    )
+
+    batch_size = 50 if config.EMBEDDING_PROVIDER == "gemini" else len(chunks)
+    vectordb = None
+
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i:i + batch_size]
+        print(f"  -> embedding batch {i // batch_size + 1} ({len(batch)} chunks) ...")
+
+        if vectordb is None:
+            vectordb = Chroma.from_documents(
+                documents=batch,
+                embedding=embedding_fn,
+                collection_name=config.COLLECTION_NAME,
+                persist_directory=str(config.CHROMA_DIR),
+            )
+        else:
+            vectordb.add_documents(batch)
+
+        if config.EMBEDDING_PROVIDER == "gemini" and i + batch_size < len(chunks):
+            print("     waiting 60s to respect free-tier rate limit ...")
+            time.sleep(60)
+
     print(f"Done. Index saved to {config.CHROMA_DIR}/")
     return vectordb
 

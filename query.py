@@ -69,6 +69,6 @@ def main():
     results = retrieve(vectordb, question)
     print_results(results)
 
-
+ 
 if __name__ == "__main__":
     main()
